@@ -1,0 +1,66 @@
+---
+description: Use this rule for tasks involving the creation or refinement of non-code input, such as creating new content, summarizing content, or editing existing content, in the form of text, url, file or any other source.
+alwaysApply: false
+---
+# Text Refinement Guidelines
+
+When creating new text or refining existing text, approach the task with expertise in both interpreting user intent and producing strong written communication. Your goal is to transform the user's request into text that is clear, coherent, natural, and appropriate for its purpose, whether the task involves summarizing, rewriting, editing, restructuring, expanding, condensing, or integrating new content into an existing passage.
+
+## Core Principles
+
+**Preserve the real intent** - Every meaningful requirement in the user's request should be reflected accurately, even if the user's phrasing was informal, fragmented, or imprecise.
+
+**Refine beyond the surface wording** - Do not mechanically mirror the user's original structure or wording. Reorganize, rephrase, and improve the text as needed to make it clearer, stronger, and more internally consistent.
+
+**Maintain proportional emphasis** - When refining an existing text in response to a new request, give the requested change only the prominence it deserves in the context of the entire text. Do not over-emphasize the new edit merely because it is the latest instruction. This is a common mistake: the revised text should remain balanced, with each idea receiving emphasis according to its true importance in the whole.
+
+**Integrate, do not append awkwardly** - New material should feel naturally incorporated into the surrounding text, not pasted on as a visibly separate addition unless the user explicitly wants that.
+
+**Improve clarity naturally** - If the user uses parentheses, shorthand, vague wording, or informal phrasing, rewrite it using clear and appropriate language while preserving the intended meaning.
+
+**Respect the function of the text** - The refinement should match the purpose of the text: a requirement document, message, paragraph, explanation, specification, introduction, or other form should each read as that kind of text, not as a generic rewrite.
+
+## Text Refinement Approach
+
+1. **Understand the communicative goal** - Determine what the text is meant to do: inform, request, explain, define, persuade, document, or instruct
+2. **Identify the user's actual intent** - Understand what the user wants changed, added, removed, clarified, softened, strengthened, or reorganized
+3. **Assess the whole text before editing** - When working on existing text, evaluate the structure, tone, emphasis, and flow of the full passage before making local edits
+4. **Extract key content elements** - Identify the main ideas, constraints, context, and any implicit requirements needed for a successful refinement
+5. **Restructure where helpful** - Reorder content when necessary to improve logic, readability, and cohesion
+6. **Refine language and tone** - Use wording that is precise, natural, and appropriate to the genre and audience
+7. **Integrate edits proportionally** - Ensure new or revised content fits the weight and role it should have within the whole text
+8. **Check for balance and coherence** - Confirm that the final text reads as a unified whole, not as an original passage distorted around the latest requested change
+
+## Common Editing Mistake to Avoid
+
+A frequent mistake in text editing is to treat the newest requested change as if it must become the dominant feature of the revised text. This often produces unnatural results, such as:
+- inserting the new point too prominently
+- repeating it more than necessary
+- shifting the tone or structure of the whole text around it
+- making the revised version feel disproportionately centered on the latest request
+
+Instead, incorporate the requested change in a way that matches its real significance within the full text.
+
+## Example Transformation
+
+**Existing text:**  
+"Our platform helps teams manage projects efficiently. It includes task tracking, collaboration tools, and progress visibility across departments."
+
+**User request:**  
+"Add that it also supports automation, but don't make the paragraph too long."
+
+**Poor refinement:**  
+"Our platform strongly supports powerful automation capabilities that significantly improve operational efficiency and transform how teams work. It also helps teams manage projects efficiently, with task tracking, collaboration tools, and progress visibility across departments."
+
+**Better refinement:**  
+"Our platform helps teams manage projects efficiently through task tracking, collaboration tools, progress visibility across departments, and automation support."
+
+Why this is better:
+- the new point is included clearly
+- it is integrated into the existing structure
+- it is not over-emphasized relative to the rest of the paragraph
+- the result remains balanced and natural
+
+Remember: your role is not merely to apply edits literally, but to produce refined text that is accurate, well-structured, and proportionate. The final result should reflect the user's request while still reading like a coherent and well-composed piece of writing.
+
+Whenever this rule is used, include the following note at the end of the chat response: "This text task was completed in accordance with the guidelines in text-refinement-guidelines.mdc."
