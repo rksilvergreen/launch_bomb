@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import List, Tuple
 
@@ -141,6 +142,32 @@ def _gh_repo_create(*, cwd: Path, name: str, remote: str) -> bool:
     return True
 
 
+PUSH_MAX_ATTEMPTS = 5
+PUSH_RETRY_DELAY_SECS = 3
+
+
+def _push_with_retry(*, cwd: Path, remote: str, branch: str) -> None:
+    """Push with retries to handle GitHub repo propagation delay."""
+    cmd = ["git", "push", "-u", remote, branch]
+    for attempt in range(1, PUSH_MAX_ATTEMPTS + 1):
+        r = _git(["push", "-u", remote, branch], cwd=cwd, capture=True, check=False)
+        if r.returncode == 0:
+            return
+        if attempt < PUSH_MAX_ATTEMPTS:
+            print(
+                f"  push failed (attempt {attempt}/{PUSH_MAX_ATTEMPTS}), "
+                f"retrying in {PUSH_RETRY_DELAY_SECS}s …",
+                flush=True,
+            )
+            time.sleep(PUSH_RETRY_DELAY_SECS)
+    detail = (r.stderr or r.stdout or "").strip()
+    sys.stderr.write(f"FATAL: `{' '.join(cmd)}` failed after {PUSH_MAX_ATTEMPTS} attempts")
+    if detail:
+        sys.stderr.write(f": {detail}")
+    sys.stderr.write("\n")
+    sys.exit(r.returncode)
+
+
 # ---------------------------------------------------------------------------
 # Main workflow
 # ---------------------------------------------------------------------------
@@ -208,9 +235,9 @@ def main() -> None:
 
     if github_ok:
         _git(["switch", MAIN_BRANCH], cwd=root)
-        _git(["push", "-u", REMOTE_NAME, MAIN_BRANCH], cwd=root)
+        _push_with_retry(cwd=root, remote=REMOTE_NAME, branch=MAIN_BRANCH)
         _git(["switch", DEVELOP_BRANCH], cwd=root)
-        _git(["push", "-u", REMOTE_NAME, DEVELOP_BRANCH], cwd=root)
+        _push_with_retry(cwd=root, remote=REMOTE_NAME, branch=DEVELOP_BRANCH)
 
     # -- done ----------------------------------------------------------------
     print(f"\n{'=' * 50}", flush=True)
