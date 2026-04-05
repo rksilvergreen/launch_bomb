@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 Disposable bootstrap: fetches project_launcher.py from the launch_bomb repo,
-runs it in the current directory, then deletes itself.
+deletes itself so git never tracks it, then runs the launcher.
 
 Usage:
   1. Copy this file into an empty project folder.
   2. Run:  python launch_bomb.py
-  3. The script self-destructs after the launcher finishes.
+  3. The script self-destructs before the launcher runs.
 """
 from __future__ import annotations
 
@@ -37,6 +37,9 @@ def _fetch(url: str) -> bytes:
 def main() -> None:
     content = _fetch(LAUNCHER_URL)
 
+    if os.path.exists(SELF):
+        os.remove(SELF)
+
     fd, tmp_path = tempfile.mkstemp(suffix=".py")
     try:
         os.write(fd, content)
@@ -46,8 +49,6 @@ def main() -> None:
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-        if os.path.exists(SELF):
-            os.remove(SELF)
 
     raise SystemExit(result.returncode)
 
