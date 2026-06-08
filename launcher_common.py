@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """
-Initialize a new project directory with Git, Cursor submodules, and optional GitHub remote.
+Shared project-initialization logic used by launch_bomb.py
+and doc_shell_launch_bomb.py.
 
-Sequence:
-  1. git init --initial-branch=main
-  2. Register cursor submodules (.cursor/rules/shared, .cursor/commands/shared)
-  3. git add -A && git commit -m "Initial commit"
-  4. Create develop branch, switch to it
-  5. (Optional) gh repo create + push both branches with upstream tracking
+Provides helpers for running commands, git operations, GitHub integration,
+and the full git-init → submodules → commit → branch → push workflow.
 
-Requires: Python 3.7+, git on PATH.  gh on PATH for GitHub integration.
+Requires: Python 3.8+, git on PATH.  gh on PATH for GitHub integration.
 """
 from __future__ import annotations
 
@@ -38,12 +35,21 @@ SUBMODULES: List[Tuple[str, str, str]] = [
     ),
 ]
 
+PUSH_MAX_ATTEMPTS = 5
+PUSH_RETRY_DELAY_SECS = 3
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _run(cmd: List[str], *, cwd: Path, capture: bool = False, check: bool = True) -> subprocess.CompletedProcess:
+def run_cmd(
+    cmd: List[str],
+    *,
+    cwd: Path,
+    capture: bool = False,
+    check: bool = True,
+) -> subprocess.CompletedProcess:
     label = " ".join(cmd)
     print(f"+ {label}", flush=True)
     result = subprocess.run(
@@ -65,11 +71,17 @@ def _run(cmd: List[str], *, cwd: Path, capture: bool = False, check: bool = True
     return result
 
 
-def _git(args: List[str], *, cwd: Path, capture: bool = False, check: bool = True) -> subprocess.CompletedProcess:
-    return _run(["git", *args], cwd=cwd, capture=capture, check=check)
+def git(
+    args: List[str],
+    *,
+    cwd: Path,
+    capture: bool = False,
+    check: bool = True,
+) -> subprocess.CompletedProcess:
+    return run_cmd(["git", *args], cwd=cwd, capture=capture, check=check)
 
 
-def _inside_git_work_tree(cwd: Path) -> bool:
+def inside_git_work_tree(cwd: Path) -> bool:
     r = subprocess.run(
         ["git", "rev-parse", "--is-inside-work-tree"],
         cwd=str(cwd),
@@ -79,6 +91,37 @@ def _inside_git_work_tree(cwd: Path) -> bool:
     )
     return r.returncode == 0 and r.stdout.strip().lower() == "true"
 
+
+def gh_available() -> bool:
+    try:
+        r = subprocess.run(
+            [GH_EXECUTABLE, "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return r.returncode == 0
+    except OSError:
+        return False
+
+
+def gh_authenticated(cwd: Path) -> bool:
+    try:
+        r = subprocess.run(
+            [GH_EXECUTABLE, "auth", "status"],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return r.returncode == 0
+    except OSError:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 
 def _normalize(p: str) -> str:
     return p.replace("\\", "/")
@@ -102,31 +145,7 @@ def _submodule_path_registered(root: Path, rel_path: str) -> bool:
     return False
 
 
-def _gh_available() -> bool:
-    try:
-        r = subprocess.run(
-            [GH_EXECUTABLE, "--version"],
-            capture_output=True, text=True, check=False,
-        )
-        return r.returncode == 0
-    except OSError:
-        return False
-
-
-def _gh_authenticated(cwd: Path) -> bool:
-    try:
-        r = subprocess.run(
-            [GH_EXECUTABLE, "auth", "status"],
-            cwd=str(cwd),
-            capture_output=True, text=True, check=False,
-        )
-        return r.returncode == 0
-    except OSError:
-        return False
-
-
 def _gh_repo_create(*, cwd: Path, name: str, remote: str) -> bool:
-    """Create a private GitHub repo via gh.  Returns True on success."""
     cmd = [
         GH_EXECUTABLE, "repo", "create", name,
         "--source", str(cwd),
@@ -137,20 +156,18 @@ def _gh_repo_create(*, cwd: Path, name: str, remote: str) -> bool:
     r = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, check=False)
     if r.returncode != 0:
         detail = (r.stderr or r.stdout or "").strip()
-        print(f"WARNING: gh repo create failed (exit {r.returncode}): {detail or 'no output'}", flush=True)
+        print(
+            f"WARNING: gh repo create failed (exit {r.returncode}): {detail or 'no output'}",
+            flush=True,
+        )
         return False
     return True
 
 
-PUSH_MAX_ATTEMPTS = 5
-PUSH_RETRY_DELAY_SECS = 3
-
-
 def _push_with_retry(*, cwd: Path, remote: str, branch: str) -> None:
-    """Push with retries to handle GitHub repo propagation delay."""
-    cmd = ["git", "push", "-u", remote, branch]
+    cmd_label = f"git push -u {remote} {branch}"
     for attempt in range(1, PUSH_MAX_ATTEMPTS + 1):
-        r = _git(["push", "-u", remote, branch], cwd=cwd, capture=True, check=False)
+        r = git(["push", "-u", remote, branch], cwd=cwd, capture=True, check=False)
         if r.returncode == 0:
             return
         if attempt < PUSH_MAX_ATTEMPTS:
@@ -161,7 +178,7 @@ def _push_with_retry(*, cwd: Path, remote: str, branch: str) -> None:
             )
             time.sleep(PUSH_RETRY_DELAY_SECS)
     detail = (r.stderr or r.stdout or "").strip()
-    sys.stderr.write(f"FATAL: `{' '.join(cmd)}` failed after {PUSH_MAX_ATTEMPTS} attempts")
+    sys.stderr.write(f"FATAL: `{cmd_label}` failed after {PUSH_MAX_ATTEMPTS} attempts")
     if detail:
         sys.stderr.write(f": {detail}")
     sys.stderr.write("\n")
@@ -169,62 +186,69 @@ def _push_with_retry(*, cwd: Path, remote: str, branch: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Main workflow
+# Public API
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    root = Path.cwd().resolve()
-    repo_name = root.name
-
-    # -- pre-flight: git must be available -----------------------------------
+def preflight(root: Path) -> None:
+    """Verify git is available and *root* is not already inside a git repo."""
     try:
         subprocess.run(["git", "--version"], capture_output=True, check=True)
     except (OSError, subprocess.CalledProcessError):
         sys.stderr.write("FATAL: git is not installed or not on PATH.\n")
         sys.exit(1)
 
-    # -- refuse to run inside an existing repo -------------------------------
-    if _inside_git_work_tree(root):
+    if inside_git_work_tree(root):
         sys.stderr.write(
             f"FATAL: A git repository already exists at {root}.\n"
             "       Remove .git or run from an empty directory.\n"
         )
         sys.exit(1)
 
+
+def init_repo(root: Path) -> bool:
+    """
+    Full git initialization: init, submodules, initial commit, branches,
+    and optional GitHub remote.
+
+    Returns True if a GitHub remote was successfully created.
+    Assumes preflight() has already passed.
+    """
+    repo_name = root.name
+
     # -- 1. git init ---------------------------------------------------------
     print(f"\n=== Initializing git repository in {root} ===\n", flush=True)
-    _git(["init", "--initial-branch", MAIN_BRANCH], cwd=root)
+    git(["init", "--initial-branch", MAIN_BRANCH], cwd=root)
 
-    # -- 2. submodules (before first commit) ---------------------------------
-    print(f"\n=== Adding Cursor submodules ===\n", flush=True)
+    # -- 2. submodules -------------------------------------------------------
+    print("\n=== Adding Cursor submodules ===\n", flush=True)
     for name, url, path in SUBMODULES:
         if _submodule_path_registered(root, path):
             print(f"  skip {name}: already registered at {path}", flush=True)
             continue
-        _git(["submodule", "add", url, path], cwd=root)
+        git(["submodule", "add", url, path], cwd=root)
 
     # -- 3. initial commit ---------------------------------------------------
-    print(f"\n=== Creating initial commit ===\n", flush=True)
-    _git(["add", "-A"], cwd=root)
-    r = _git(["commit", "-m", INITIAL_COMMIT_MESSAGE], cwd=root, capture=True, check=False)
+    print("\n=== Creating initial commit ===\n", flush=True)
+    git(["add", "-A"], cwd=root)
+    r = git(["commit", "-m", INITIAL_COMMIT_MESSAGE], cwd=root, capture=True, check=False)
     if r.returncode != 0:
-        _git(["commit", "--allow-empty", "-m", INITIAL_COMMIT_MESSAGE], cwd=root)
+        git(["commit", "--allow-empty", "-m", INITIAL_COMMIT_MESSAGE], cwd=root)
 
     # -- 4. branches ---------------------------------------------------------
     print(f"\n=== Creating {DEVELOP_BRANCH} branch ===\n", flush=True)
-    _git(["branch", DEVELOP_BRANCH], cwd=root)
-    _git(["switch", DEVELOP_BRANCH], cwd=root)
+    git(["branch", DEVELOP_BRANCH], cwd=root)
+    git(["switch", DEVELOP_BRANCH], cwd=root)
 
     # -- 5. optional GitHub remote -------------------------------------------
-    print(f"\n=== GitHub remote ===\n", flush=True)
+    print("\n=== GitHub remote ===\n", flush=True)
     github_ok = False
-    if not _gh_available():
+    if not gh_available():
         print(
             "  gh CLI not found. Skipping GitHub repo creation.\n"
             "  Install https://cli.github.com or add the remote manually.",
             flush=True,
         )
-    elif not _gh_authenticated(root):
+    elif not gh_authenticated(root):
         print(
             "  gh is not authenticated (run `gh auth login`).\n"
             "  Skipping GitHub repo creation.",
@@ -234,19 +258,9 @@ def main() -> None:
         github_ok = _gh_repo_create(cwd=root, name=repo_name, remote=REMOTE_NAME)
 
     if github_ok:
-        _git(["switch", MAIN_BRANCH], cwd=root)
+        git(["switch", MAIN_BRANCH], cwd=root)
         _push_with_retry(cwd=root, remote=REMOTE_NAME, branch=MAIN_BRANCH)
-        _git(["switch", DEVELOP_BRANCH], cwd=root)
+        git(["switch", DEVELOP_BRANCH], cwd=root)
         _push_with_retry(cwd=root, remote=REMOTE_NAME, branch=DEVELOP_BRANCH)
 
-    # -- done ----------------------------------------------------------------
-    print(f"\n{'=' * 50}", flush=True)
-    print(f"Project ready: {root}", flush=True)
-    print(f"  Default branch : {MAIN_BRANCH}", flush=True)
-    print(f"  Current branch : {DEVELOP_BRANCH}", flush=True)
-    print(f"  GitHub remote  : {'configured' if github_ok else 'not configured'}", flush=True)
-    print(f"{'=' * 50}\n", flush=True)
-
-
-if __name__ == "__main__":
-    main()
+    return github_ok
